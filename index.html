@@ -658,6 +658,43 @@
             justify-content: center;
         }
 
+        .contact-form .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .form-honey {
+            display: none;
+        }
+
+        .form-status {
+            display: none;
+            margin-top: 1.5rem;
+            padding: 1rem;
+            border-radius: 10px;
+            font-size: 0.95rem;
+        }
+
+        .form-status.success {
+            display: block;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #86efac;
+        }
+
+        .form-status.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .form-status a {
+            color: inherit;
+            font-weight: 600;
+        }
+
         /* Footer */
         footer {
             background: var(--dark);
@@ -1128,9 +1165,12 @@
                     <label for="message">How Can We Help?</label>
                     <textarea id="message" name="message" required placeholder="Tell us about your project..."></textarea>
                 </div>
+                <!-- Honeypot: bots fill this in, people never see it -->
+                <input type="text" name="_honey" class="form-honey" tabindex="-1" autocomplete="off">
                 <button type="submit" class="btn btn-primary">
                     Send Message <i class="fas fa-paper-plane"></i>
                 </button>
+                <div class="form-status" role="status" aria-live="polite"></div>
             </form>
         </div>
     </section>
@@ -1202,23 +1242,52 @@
             });
         });
 
-        // Form submission
-        function handleSubmit(e) {
+        // Form submission: relayed to info@onesrc.net through FormSubmit (formsubmit.co)
+        async function handleSubmit(e) {
             e.preventDefault();
-            const formData = new FormData(e.target);
+            const form = e.target;
+            const button = form.querySelector('button[type="submit"]');
+            const status = form.querySelector('.form-status');
+            const formData = new FormData(form);
             const name = formData.get('name');
-            const email = formData.get('email');
             const company = formData.get('company');
-            const message = formData.get('message');
-            
-            // Create mailto link with form data
-            const subject = encodeURIComponent(`Contact from ${name} - ${company || 'Website'}`);
-            const body = encodeURIComponent(`Name: ${name}\nEmail: ${email}\nCompany: ${company}\n\nMessage:\n${message}`);
-            
-            window.location.href = `mailto:info@onesrc.net?subject=${subject}&body=${body}`;
-            
-            // Show success message
-            alert('Thank you for your message! Your email client will open to send the message.');
+
+            const payload = {
+                name,
+                email: formData.get('email'),
+                company: company || 'N/A',
+                message: formData.get('message'),
+                _subject: `Website contact from ${name}${company ? ` (${company})` : ''}`,
+                _template: 'table',
+                _honey: formData.get('_honey')
+            };
+
+            const buttonHTML = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = 'Sending... <i class="fas fa-spinner fa-spin"></i>';
+            status.className = 'form-status';
+
+            try {
+                const res = await fetch('https://formsubmit.co/ajax/info@onesrc.net', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok || String(data.success) !== 'true') {
+                    throw new Error(data.message || `HTTP ${res.status}`);
+                }
+                form.reset();
+                status.textContent = "Thanks! Your message has been sent. We'll be in touch soon.";
+                status.className = 'form-status success';
+            } catch (err) {
+                console.error('Contact form error:', err);
+                status.innerHTML = 'Sorry, something went wrong sending your message. Please email us directly at <a href="mailto:info@onesrc.net">info@onesrc.net</a>.';
+                status.className = 'form-status error';
+            } finally {
+                button.disabled = false;
+                button.innerHTML = buttonHTML;
+            }
         }
 
         // Smooth scroll for anchor links
